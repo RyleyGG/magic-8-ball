@@ -1,6 +1,6 @@
 import React from 'react';
 import { Animated, Text, View, StyleSheet, Button } from 'react-native';
-import DropDownPicker from 'react-native-dropdown-picker';
+import { Dropdown } from 'react-native-element-dropdown';
 
 export default function App() {
 	/* main display props */
@@ -11,27 +11,41 @@ export default function App() {
 
 	/* display of questions */
 	const [questionOpen, setQuestionOpen] = React.useState(false);
+	const [questionsFocused, setQuestionsFocused] = React.useState(false);
 	const [questionValue, setQuestionValue] = React.useState(null);
-	const [questions, setQuestions] = React.useState([
-		{label: 'Apple', value: 'apple'},
-		{label: 'Banana', value: 'banana'}
-	])
+	const questions  = [
+		{label: 'Should I eat pineapple on my pizza?', value: 'pineapple_pizza'},
+		{label: 'Should I use tabs to indent my code?', value: 'tabs_indent'},
+		{label: 'Should I use spaces to indent my code?', value: 'space_indent'},
+		{label: 'Will I ever be a billionaire?', value: 'billionaire'},
+		{label: 'Should I eat spaghetti for dinner?', value: 'spaghetti_dinner'},
+		{label: 'Would I survive the zombie apocalypse?', value: 'zombie_survival'},
+		{label: 'Should I use AWS for my next full-stack project?', value: 'aws_project'},
+		{label: 'Should I use Google Cloud for my next full-stack project?', value: 'cloud_project'},
+		{label: 'Should I use Microsoft Azure for my next full-stack project?', value: 'azure_project'},
+		{label: 'Would I beat Mike Tyson in a boxing match?', value: 'mike_tyson_boxing'},
+		{label: 'Would I beat Mike Tyson in a game of Chess?', value: 'mike_tyson_chess'},
+		{label: 'Should I get another cat?', value: 'new_cat'},
+		{label: 'Should I get another dog?', value: 'new_dog'},
+		{label: 'Will I ever go to jail?', value: 'jail'},
+		{label: 'Will I ever break out of jail?', value: 'jail_break'}
+	]
 	
 	const submitQuestion = async () => {
 		console.log(questionValue);
     Animated.timing(initialFade, {
       toValue: 0,
       duration: 1500
-    }).start(() => generateAnswer());
+    }).start(() => generateAnswer(
+			Animated.timing(answerFade, {
+				toValue: 1,
+				duration: 1500
+			}).start(() => generateAnswer())));
 	};
 	
 	const generateAnswer = async () => {
 		setInitialView('none');
 		setAnswerView('flex');
-    Animated.timing(answerFade, {
-      toValue: 1,
-      duration: 1500
-    }).start();
 	};
 
 	const returnToInitial = async () => {
@@ -45,26 +59,38 @@ export default function App() {
       duration: 1500
     }).start(() => setInitialView('flex'));
 
+		setQuestionValue(null);
 	};
 
   return (
 		<View style={styles.container}>
 			<Animated.View style={[styles.container, {opacity: initialFade, display: initialView}]}>
 				<Text>Select your question from the dropdown below<br />and confirm when you're ready for your <b>fate</b></Text>
-				<DropDownPicker
-				open={questionOpen}
-				value={questionValue}
-				items={questions}
-				setOpen={setQuestionOpen}
-				setValue={setQuestionValue}
-				setItems={setQuestions}
-				/>
+				<br />
+        <Dropdown
+          style={[styles.dropdown, questionsFocused && { borderColor: 'blue' }]}
+          placeholderStyle={styles.placeholderStyle}
+          selectedTextStyle={styles.selectedTextStyle}
+          data={questions}
+          labelField="label"
+          valueField="value"
+          placeholder={!questionsFocused ? 'Select item' : '...'}
+          value={questionValue}
+          onFocus={() => setQuestionsFocused(true)}
+          onBlur={() => setQuestionsFocused(false)}
+          onChange={item => {
+            setQuestionValue(item.value);
+            setQuestionsFocused(false);
+          }}
+        />
 				
+				<br />
 				<Button
 				onPress={submitQuestion}
 				title="Confirm"
 				color="#841584"
 				accessibilityLabel="Button for confirming question selection"
+				disabled={questionValue == null}
 				/>
 			</Animated.View>
 
@@ -90,4 +116,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     textAlign: 'center'
   },
+	placeholderStyle: {
+		fontSize: 14,
+	},
+	selectedTextStyle: {
+		fontSize: 14,
+	},
+	dropdown: {
+		width: 225,
+		borderColor: 'gray',
+		borderWidth: 0.25,
+		borderRadius: 300,
+		paddingHorizontal: 5,
+	},
 });
