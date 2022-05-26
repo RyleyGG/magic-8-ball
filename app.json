@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "magic-8-ball",
+    "slug": "magic-8-ball",
+    "version": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ]
+  },
+  "name": "magic-8-ball"
+}
