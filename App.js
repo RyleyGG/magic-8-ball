@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Animated, Text, View, StyleSheet, Button } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 
@@ -9,10 +9,25 @@ export default function App() {
 	const [answerView, setAnswerView] = React.useState('none');
 	const answerFade = React.useRef(new Animated.Value(0)).current;
 
-	/* display of questions */
-	const [questionOpen, setQuestionOpen] = React.useState(false);
+	/* question/answer props */
 	const [questionsFocused, setQuestionsFocused] = React.useState(false);
 	const [questionValue, setQuestionValue] = React.useState(null);
+	const [selectedAnswer, setSelectedAnswer] = React.useState(null);
+	const [answerDict, setAnswerDict] = React.useState({});
+	const [answerCount, setAnswerCount] = React.useState(1);
+	const [badAnswerCount, setBadAnswerCount] = React.useState(false);
+	const answers = [
+		'Yes',
+		'No',
+		'Uh... absolutely not',
+		'I\'ll give it a 50/50 chance',
+		'Maybe',
+		'Crystal ball is foggy, check back later',
+		'Internet tubes are clogged, check back later',
+		'Sure, why not?',
+		'Why would you even bother asking me that?'
+	];
+	
 	const questions  = [
 		{label: 'Should I eat pineapple on my pizza?', value: 'pineapple_pizza'},
 		{label: 'Should I use tabs to indent my code?', value: 'tabs_indent'},
@@ -32,38 +47,76 @@ export default function App() {
 	]
 	
 	const submitQuestion = async () => {
-		console.log(questionValue);
     Animated.timing(initialFade, {
       toValue: 0,
-      duration: 1500
-    }).start(() => generateAnswer(
+      duration: 1000
+    }).start(() => {
+			generateAnswers();
+			setAnswerView('flex');
+			setInitialView('none');
 			Animated.timing(answerFade, {
 				toValue: 1,
-				duration: 1500
-			}).start(() => generateAnswer())));
+				duration: 1000
+			}).start(() => saveAnswers())});
 	};
 	
-	const generateAnswer = async () => {
-		setInitialView('none');
-		setAnswerView('flex');
+	const generateAnswers = async () => {
+		let iter = 0;
+
+		while (iter < answerCount) {
+			const newAnswer = answers[Math.floor(Math.random() * answers.length)];
+
+			if (Object.keys(answerDict).includes(newAnswer)) {
+				answerDict[newAnswer] = answerDict[newAnswer] + 1;
+			}
+			else {
+				answerDict[newAnswer] = 1;
+			}
+
+			iter++;
+		}
+	};
+
+	const saveAnswers = async () => {
+
 	};
 
 	const returnToInitial = async () => {
     Animated.timing(answerFade, {
       toValue: 0,
-      duration: 1500
-    }).start(() => setAnswerView('none'));
+      duration: 1000
+    }).start(() => {
+			setInitialView('flex');
+			setAnswerView('none');
+			setQuestionValue(null);
+			setAnswerDict({});
+			Animated.timing(initialFade, {
+				toValue: 1,
+				duration: 1000
+			}).start()});
 
-    Animated.timing(initialFade, {
-      toValue: 1,
-      duration: 1500
-    }).start(() => setInitialView('flex'));
+	};
 
-		setQuestionValue(null);
+	useEffect(async () => {
+		if (answerCount < 1 || answerCount > 1000) {
+			setBadAnswerCount(true);
+		}
+		else {
+			setBadAnswerCount(false);
+		}
+	}, [answerCount]);
+
+	const viewLocalStats = async () => {
+
+	};
+
+	const viewGlobalStats = async () => {
+
 	};
 
   return (
 		<View style={styles.container}>
+			{/* Initial view (question select) */}
 			<Animated.View style={[styles.container, {opacity: initialFade, display: initialView}]}>
 				<Text>Select your question from the dropdown below<br />and confirm when you're ready for your <b>fate</b></Text>
 				<br />
@@ -83,25 +136,51 @@ export default function App() {
             setQuestionsFocused(false);
           }}
         />
-				
 				<br />
+				<Text>Enter the number of answers to generate for this question (1-1000)</Text>
+				<input
+					type="text"
+					pattern="[0-9]*"
+					value={answerCount}
+					onChange={(e) =>
+						setAnswerCount((v) => (e.target.validity.valid ? e.target.value : v))
+					}
+				/>
+				<br /><br />
 				<Button
 				onPress={submitQuestion}
 				title="Confirm"
 				color="#841584"
 				accessibilityLabel="Button for confirming question selection"
-				disabled={questionValue == null}
+				disabled={questionValue == null || badAnswerCount}
 				/>
 			</Animated.View>
 
+			{/* answer display */}
 			<Animated.View style={[styles.container, {opacity: answerFade, display: answerView}]}>
-				<Text>This is the answer view. Nice...</Text>
+				{Object.keys(answerDict).map((answer) => (
+					<Text><b><i>{answer}</i></b> was rolled {answerDict[answer]} times</Text>
+				))}<br /><br />
 				
 				<Button
 				onPress={returnToInitial}
 				title="Start over"
 				color="#841584"
 				accessibilityLabel="Button for returning to question selection"
+				/>
+
+				<Button
+				onPress={viewLocalStats}
+				title="View local stats"
+				color="#841584"
+				accessibilityLabel="Button for displaying local answer stats"
+				/>
+
+				<Button
+				onPress={viewGlobalStats}
+				title="View global stats"
+				color="#841584"
+				accessibilityLabel="Button for displaying global answer stats"
 				/>
 			</Animated.View>
 		</View>
@@ -117,13 +196,13 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
 	placeholderStyle: {
-		fontSize: 14,
+		fontSize: 13,
 	},
 	selectedTextStyle: {
-		fontSize: 14,
+		fontSize: 13,
 	},
 	dropdown: {
-		width: 225,
+		width: 500,
 		borderColor: 'gray',
 		borderWidth: 0.25,
 		borderRadius: 300,
