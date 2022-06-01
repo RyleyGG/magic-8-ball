@@ -4,6 +4,7 @@ import { Dropdown } from 'react-native-element-dropdown';
 import {
     BarChart,
   } from "react-native-chart-kit";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function App() {
 	/* main display props */
@@ -11,17 +12,15 @@ export default function App() {
   const initialFade = React.useRef(new Animated.Value(1)).current;
 	const [answerView, setAnswerView] = React.useState('none');
 	const answerFade = React.useRef(new Animated.Value(0)).current;
-	const [globalStatView, setGlobalStatView] = React.useState('none');
-	const globalStatFade = React.useRef(new Animated.Value(0)).current;
 
 	/* question/answer props */
 	const [questionsFocused, setQuestionsFocused] = React.useState(false);
 	const [questionValue, setQuestionValue] = React.useState(null);
-	const [selectedAnswer, setSelectedAnswer] = React.useState(null);
 	const [answerDict, setAnswerDict] = React.useState({});
+	const [globalAnswers, setGlobalAnswers] = React.useState({});
+	const [globalQuestionResults, setGlobalQuestionResults] = React.useState({});
 	const [answerCount, setAnswerCount] = React.useState(100);
 	const [badAnswerCount, setBadAnswerCount] = React.useState(false);
-	const [largestAnswerCount, setLargestAnswerCount] = React.useState(0);
 	const answers = [
 		'Yes',
 		'Absolutely!',
@@ -54,6 +53,8 @@ export default function App() {
 	];
 
 	const [barData, setBarData] = React.useState({labels: [], datasets: [{data: []}]});
+	const [globalBarData, setGlobalBarData] = React.useState({labels: [], datasets: [{data: []}]});
+	const [globalQuestionBarData, setGlobalQuestionBarData] = React.useState({labels: [], datasets: [{data: []}]});
 
 
 	const chartConfig = {
@@ -64,39 +65,33 @@ export default function App() {
 		labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
 	};
 	
-	/* APP TRAVERSAL FUNCTIONS */
-	const viewReset = async () => {
-		setInitialView('none');
-		setAnswerView('none');
-		setGlobalStatView('none');
-		setQuestionValue(null);
-		setAnswerDict({});
-	};
+	useEffect(async () => {
+		try {
+			const globalDataFromStorage = await AsyncStorage.getItem('globalStats')
+			if(globalDataFromStorage !== null) {
+				setGlobalAnswers(JSON.parse(globalDataFromStorage));
+				setBarData({labels: Object.keys(globalAnswers), datasets: [{data: Object.values(globalAnswers)}]});
+			}
+		} catch(error) {
+			console.log(error);
+		}
+	}, []);
 
+	/* APP TRAVERSAL FUNCTIONS */
 	const toInitial = async (fadeObj) => {
     Animated.timing(fadeObj, {
       toValue: 0,
       duration: 1000
     }).start(() => {
-			viewReset();
 			setInitialView('flex');
+			setAnswerView('none');
+			setQuestionValue(null);
+			setAnswerDict({});
+			setGlobalQuestionResults({});
 			Animated.timing(initialFade, {
 				toValue: 1,
-				duration: 1000
+				duration: 1000,
 			}).start()});
-	};
-
-	const toGlobalStats = async (fadeObj) => {
-        Animated.timing(fadeObj, {
-          toValue: 0,
-          duration: 1000
-        }).start(() => {
-                viewReset();
-                setGlobalStatView('flex');
-                Animated.timing(globalStatFade, {
-                    toValue: 1,
-                    duration: 1000
-                }).start()});
 	};
 
 	const submitQuestion = async () => {
@@ -109,8 +104,9 @@ export default function App() {
 			setInitialView('none');
 			Animated.timing(answerFade, {
 				toValue: 1,
-				duration: 1000
-			}).start(() => saveAnswers())});
+				duration: 1000,
+				useNativeDriver: false,
+			}).start()});
 	};
 	
 	
@@ -133,14 +129,152 @@ export default function App() {
 
 		/* once answers are generated, save in bar data in appropriate format */
 		setBarData({labels: Object.keys(answerDict), datasets: [{data: Object.values(answerDict)}]});
-		setLargestAnswerCount(Object.values(answerDict).reduce(function(a, b) {
-				return Math.max(a, b);
-		}, -Infinity));
+		saveAnswers();
 	};
 
 	const saveAnswers = async () => {
+		try {
+			if (Object.keys(globalAnswers).length == 0) { /* if global dictionary wasn't grabbed from storage, create new */
+				await AsyncStorage.setItem('globalStats', JSON.stringify(answerDict));
+				setGlobalAnswers(answerDict);
+				setGlobalBarData({labels: Object.keys(answerDict), datasets: [{data: Object.values(answerDict)}]});
+			}
+			else { /* merge local results with global results and re-save */
+				const localAnswerKeys = Object.keys(answerDict);
+				for (let i = 0; i < localAnswerKeys.length; i++) {
+					const curKey = localAnswerKeys[i];
+					if (Object.keys(globalAnswers).includes(curKey)) {
+						globalAnswers[curKey] = globalAnswers[curKey] + answerDict[curKey];
+					}
+					else {
+						globalAnswers[curKey] = answerDict[curKey];
+					}
+				}
 
+				await AsyncStorage.setItem('globalStats', JSON.stringify(globalAnswers));
+				setGlobalBarData({labels: Object.keys(globalAnswers), datasets: [{data: Object.values(globalAnswers)}]});
+			}
+
+			let questionResultsFromStorage = await AsyncStorage.getItem(questionValue);
+			if (questionResultsFromStorage === null) { /* if global dictionary wasn't grabbed from storage, create new */
+				await AsyncStorage.setItem(questionValue, JSON.stringify(answerDict));
+				setGlobalQuestionResults(answerDict);
+				setGlobalQuestionBarData({labels: Object.keys(answerDict), datasets: [{data: Object.values(answerDict)}]});
+			}
+			else { /* merge local results with global results and re-save */
+				questionResultsFromStorage = JSON.parse(questionResultsFromStorage);
+				const localAnswerKeys = Object.keys(answerDict);
+				for (let i = 0; i < localAnswerKeys.length; i++) {
+					const curKey = localAnswerKeys[i];
+					if (Object.keys(questionResultsFromStorage).includes(curKey)) {
+						questionResultsFromStorage[curKey] = questionResultsFromStorage[curKey] + answerDict[curKey];
+					}
+					else {
+						questionResultsFromStorage[curKey] = answerDict[curKey];
+					}
+				}
+
+				await AsyncStorage.setItem(questionValue, JSON.stringify(questionResultsFromStorage));
+				setGlobalQuestionResults(questionResultsFromStorage);
+				setGlobalQuestionBarData({labels: Object.keys(questionResultsFromStorage), datasets: [{data: Object.values(questionResultsFromStorage)}]});
+			}
+		}
+		catch (error) {
+			console.log(error);
+		}
 	};
+
+	const sortStats = async () => {
+		/* first sort occurrence values */
+		const localAnswerKeys = [];
+		const answerKeyArr = Object.keys(answerDict);
+		const answerValueArr = Object.values(answerDict);
+		const sortedData = Object.values(answerDict).sort((a, b) => {
+			if (a < b) {
+				return -1;
+			}
+			else if (a > b) {
+				return 1;
+			}
+			return 0;
+		});
+		
+		/* then sort keys based on sorted values */
+		for (let i = 0; i < sortedData.length; i++) {
+			const valueIndex = answerValueArr.indexOf(sortedData[i]);
+			localAnswerKeys.push(answerKeyArr[valueIndex]);
+			answerKeyArr.splice(valueIndex, 1);
+			answerValueArr.splice(valueIndex, 1);
+		}
+
+		/* finally, reconstruct dictionary and send to the state */
+		const newDict = {};
+		for (let i = 0; i < localAnswerKeys.length; i++) {
+			newDict[localAnswerKeys[i]] = sortedData[i];
+		}
+		setAnswerDict(newDict);
+		setBarData({labels: Object.keys(newDict), datasets: [{data: Object.values(newDict)}]});
+
+		/* first sort occurrence values */
+		const localGlobalKeys = [];
+		const globalKeyArr = Object.keys(globalAnswers);
+		const globalValueArr = Object.values(globalAnswers);
+		const globalSortedData = Object.values(globalAnswers).sort((a, b) => {
+			if (a < b) {
+				return -1;
+			}
+			else if (a > b) {
+				return 1;
+			}
+			return 0;
+		});
+		
+		/* then sort keys based on sorted values */
+		for (let i = 0; i < globalSortedData.length; i++) {
+			const valueIndex = globalValueArr.indexOf(globalSortedData[i]);
+			localGlobalKeys.push(globalKeyArr[valueIndex]);
+			globalKeyArr.splice(valueIndex, 1);
+			globalValueArr.splice(valueIndex, 1);
+		}
+
+		/* finally, reconstruct dictionary and send to the state */
+		const newGlobalDict = {};
+		for (let i = 0; i < localGlobalKeys.length; i++) {
+			newGlobalDict[localGlobalKeys[i]] = globalSortedData[i];
+		}
+		setGlobalAnswers(newGlobalDict);
+		setGlobalBarData({labels: Object.keys(newGlobalDict), datasets: [{data: Object.values(newGlobalDict)}]});
+
+		/* first sort occurrence values */
+		const localGlobalQuestionKeys = [];
+		const globalQuestionKeyArr = Object.keys(globalQuestionResults);
+		const globalQuestionValueArr = Object.values(globalQuestionResults);
+		const globalQuestionSortedData = Object.values(globalQuestionResults).sort((a, b) => {
+			if (a < b) {
+				return -1;
+			}
+			else if (a > b) {
+				return 1;
+			}
+			return 0;
+		});
+		
+		/* then sort keys based on sorted values */
+		for (let i = 0; i < globalQuestionSortedData.length; i++) {
+			const valueIndex = globalQuestionValueArr.indexOf(globalQuestionSortedData[i]);
+			localGlobalQuestionKeys.push(globalQuestionKeyArr[valueIndex]);
+			globalQuestionKeyArr.splice(valueIndex, 1);
+			globalQuestionValueArr.splice(valueIndex, 1);
+		}
+
+		/* finally, reconstruct dictionary and send to the state */
+		const newGlobalQuestionDict = {};
+		for (let i = 0; i < localGlobalKeys.length; i++) {
+			newGlobalQuestionDict[localGlobalQuestionKeys[i]] = globalQuestionSortedData[i];
+		}
+		setGlobalQuestionResults(newGlobalQuestionDict);
+		setGlobalQuestionBarData({labels: Object.keys(newGlobalQuestionDict), datasets: [{data: Object.values(newGlobalQuestionDict)}]});
+	}
 
 
 	useEffect(async () => {
@@ -197,17 +331,37 @@ export default function App() {
 
 			{/* answer display */}
 			<Animated.View style={[styles.container, {opacity: answerFade, display: answerView}]}>
-				{/* {Object.keys(answerDict).map((answer) => (
-					<Text><b><i>{answer}</i></b> was rolled {answerDict[answer]} times</Text>
-				))}<br /><br /> */}
-
+				<Text style={{fontSize: 20, fontWeight: 'bold'}}>Local results for your question</Text>
 				<BarChart
 				data={barData}
-				width={Dimensions.get("window").width * 0.85}
+				width={Dimensions.get("window").width * 0.9}
 				height={500}
 				yAxisInterval = {1}
 				fromZero = {true}
-				segments = {largestAnswerCount}
+				showValuesOnTopOfBars = {true}
+				chartConfig={chartConfig}
+				/><br /><br />
+
+				<Text style={{fontSize: 20, fontWeight: 'bold'}}>Global results (all results for your question)</Text>
+				<BarChart
+				data={globalQuestionBarData}
+				width={Dimensions.get("window").width * 0.9}
+				height={500}
+				yAxisInterval = {1}
+				fromZero = {true}
+				showValuesOnTopOfBars = {true}
+				chartConfig={chartConfig}
+				/><br /><br />
+
+
+				<Text style={{fontSize: 20, fontWeight: 'bold'}}>Global results (all results for all questions)</Text>
+				<BarChart
+				data={globalBarData}
+				width={Dimensions.get("window").width * 0.9}
+				height={500}
+				yAxisInterval = {1}
+				fromZero = {true}
+				showValuesOnTopOfBars = {true}
 				chartConfig={chartConfig}
 				/><br /><br />
 				
@@ -220,36 +374,12 @@ export default function App() {
 					/>
 
 					<Button
-					onPress={() => toGlobalStats(answerFade)}
-					title="View global stats"
+					onPress={() => sortStats()}
+					title="Sort Occurrences"
 					color="#841584"
-					accessibilityLabel="Button for displaying global answer stats"
+					accessibilityLabel="Sorts the local stats from lowest to highest in terms of occurrence count"
 					/>
 				</View>
-			</Animated.View>
-
-			{/* global stat display */}
-			<Animated.View style={[styles.container, {opacity: globalStatFade, display: globalStatView}]}>
-				{Object.keys(answerDict).map((answer) => (
-					<Text><b><i>{answer}</i></b> was rolled {answerDict[answer]} times</Text>
-				))}<br /><br />
-				
-				<BarChart
-				data={barData}
-				width={Dimensions.get("window").width * 0.85}
-				height={500}
-				yAxisInterval = {1}
-				fromZero = {true}
-				segments = {largestAnswerCount}
-				chartConfig={chartConfig}
-				/>
-        
-				<Button
-				onPress={() => toInitial(globalStatFade)}
-				title="Start over"
-				color="#841584"
-				accessibilityLabel="Button for returning to question selection"
-				/>
 			</Animated.View>
 		</View>
   );
